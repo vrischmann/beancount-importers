@@ -1,4 +1,5 @@
 import csv
+import re
 
 from datetime import datetime
 
@@ -17,6 +18,7 @@ FIELDS = [
     "",
 ]
 
+av_re = re.compile("vrst (fortuneo vie|symphonis-vie)")
 
 class InvalidFormatError(Exception):
     pass
@@ -100,7 +102,7 @@ class Importer(importer.ImporterProtocol):
                     ))
 
                 # We can infer the other posting account here.
-                if 'versement' in label or 'vrst fortuneo vie' in label:
+                if av_re.match(label):
                     account = self.av_account
 
                     txn.postings.append(
