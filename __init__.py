@@ -39,6 +39,8 @@ def archive_file(f):
         finally:
             fd.close()
 
+        return
+
     with zipfile.ZipFile(f.name, 'r') as zf:
         for name in zf.namelist():
             if name.startswith('HistoriqueOperations') and name.endswith('.csv'):
