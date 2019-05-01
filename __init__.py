@@ -23,8 +23,10 @@ FIELDS = [
 
 av_re = re.compile("vrst (fortuneo vie|symphonis-vie)")
 
+
 class InvalidFormatError(Exception):
     pass
+
 
 class InvalidZipArchive(Exception):
     pass
@@ -43,14 +45,17 @@ def archive_file(f):
 
     with zipfile.ZipFile(f.name, 'r') as zf:
         for name in zf.namelist():
-            if name.startswith('HistoriqueOperations') and name.endswith('.csv'):
+            if name.startswith('HistoriqueOperations') and name.endswith(
+                    '.csv'):
                 with zf.open(name) as f:
                     yield io.TextIOWrapper(f, encoding='iso-8859-1')
 
+
 class Importer(importer.ImporterProtocol):
-    def __init__(self, checking_account, av_account):
+    def __init__(self, checking_account, av_account, **kwargs):
         self.checking_account = checking_account
         self.av_account = av_account
+        self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
         def check_fields(f):
@@ -66,6 +71,9 @@ class Importer(importer.ImporterProtocol):
 
         with archive_file(f) as f:
             return check_fields(f)
+
+    def _make_posting(self, account, amount=None):
+        return data.Posting(account, amount, None, None, None, None)
 
     def extract(self, f):
         entries = []
@@ -117,29 +125,24 @@ class Importer(importer.ImporterProtocol):
 
                 # Create the postings.
 
-                txn.postings.append(
-                    data.Posting(
-                        self.checking_account,
-                        amount.Amount(D(txn_amount), 'EUR'),
-                        None,
-                        None,
-                        None,
-                        None,
-                    ))
-
-                # We can infer the other posting account here.
+                second_account = "Unknown"
                 if av_re.match(label):
-                    account = self.av_account
+                    second_account = self.av_account
 
-                    txn.postings.append(
-                        data.Posting(
-                            self.av_account,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        ))
+                if self.invert_posting:
+                    first_posting = self._make_posting(self.checking_account, None)
+                    second_posting = self._make_posting(second_account, -amount.Amount(D(txn_amount), 'EUR'))
+
+                    txn.postings.append(second_posting)
+                    txn.postings.append(first_posting)
+                else:
+                    first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
+                    second_posting = self._make_posting(second_account)
+
+                    txn.postings.append(first_posting)
+                    txn.postings.append(second_posting)
+
+                # Done
 
                 entries.append(txn)
 
