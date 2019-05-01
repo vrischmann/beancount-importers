@@ -92,7 +92,7 @@ class Importer(importer.ImporterProtocol):
 
                 # Extract data
 
-                date = datetime.strptime(row[0], "%d/%m/%Y")
+                row_date = datetime.strptime(row[0], "%d/%m/%Y")
                 label = row[2]
 
                 txn_amount = row[3]
@@ -106,7 +106,7 @@ class Importer(importer.ImporterProtocol):
 
                 txn = data.Transaction(
                     meta=meta,
-                    date=date,
+                    date=row_date.date(),
                     flag=flags.FLAG_OKAY,
                     payee="",
                     narration=label,
