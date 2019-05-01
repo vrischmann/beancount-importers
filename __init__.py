@@ -1,5 +1,8 @@
 import csv
 import re
+import zipfile
+import io
+from contextlib import contextmanager
 
 from datetime import datetime
 
@@ -23,6 +26,24 @@ av_re = re.compile("vrst (fortuneo vie|symphonis-vie)")
 class InvalidFormatError(Exception):
     pass
 
+class InvalidZipArchive(Exception):
+    pass
+
+
+@contextmanager
+def archive_file(f):
+    if f.name.endswith('.csv'):
+        fd = open(f.name, encoding='iso-8859-1')
+        try:
+            yield fd
+        finally:
+            fd.close()
+
+    with zipfile.ZipFile(f.name, 'r') as zf:
+        for name in zf.namelist():
+            if name.startswith('HistoriqueOperations') and name.endswith('.csv'):
+                with zf.open(name) as f:
+                    yield io.TextIOWrapper(f, encoding='iso-8859-1')
 
 class Importer(importer.ImporterProtocol):
     def __init__(self, checking_account, av_account):
@@ -30,7 +51,7 @@ class Importer(importer.ImporterProtocol):
         self.av_account = av_account
 
     def identify(self, f):
-        with open(f.name, encoding='iso-8859-1') as f:
+        def check_fields(f):
             rd = csv.reader(f, delimiter=';')
             for row in rd:
                 if set(row) != set(FIELDS):
@@ -39,12 +60,15 @@ class Importer(importer.ImporterProtocol):
 
                 break
 
-        return True
+            return True
+
+        with archive_file(f) as f:
+            return check_fields(f)
 
     def extract(self, f):
         entries = []
 
-        with open(f.name, encoding='iso-8859-1') as fd:
+        with archive_file(f) as fd:
             rd = csv.reader(fd, delimiter=';')
 
             header = True
