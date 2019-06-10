@@ -3,14 +3,13 @@ import re
 import zipfile
 import io
 from contextlib import contextmanager
-
 from datetime import datetime
-
 from beancount.core.number import D
 from beancount.core import amount
 from beancount.core import flags
 from beancount.core import data
 from beancount.ingest import importer
+from .helpers import identify
 
 FIELDS = [
     "Date opération",
@@ -53,24 +52,15 @@ def archive_file(f):
 
 class Importer(importer.ImporterProtocol):
     def __init__(self, checking_account, av_account, **kwargs):
+        csv.register_dialect("fortuneo", "excel", delimiter=";")
+
         self.checking_account = checking_account
         self.av_account = av_account
         self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
-        def check_fields(f):
-            rd = csv.reader(f, delimiter=';')
-            for row in rd:
-                if set(row) != set(FIELDS):
-                    print("invalid header")
-                    return False
-
-                break
-
-            return True
-
         with archive_file(f) as f:
-            return check_fields(f)
+            return identify(f, "fortuneo", FIELDS)
 
     def _make_posting(self, account, amount=None):
         return data.Posting(account, amount, None, None, None, None)
