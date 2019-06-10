@@ -77,8 +77,6 @@ class Importer(importer.ImporterProtocol):
                     txn_amount = row[3]
                 txn_amount = txn_amount.replace(',', '.')
 
-                print(txn_amount)
-
                 # Prepare the transaction
 
                 meta = data.new_metadata(f.name, line_index)
