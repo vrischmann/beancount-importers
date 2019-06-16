@@ -189,7 +189,7 @@ class Importer(importer.ImporterProtocol):
             # Extract data
 
             row_date = datetime.strptime(row[3], "%d/%m/%Y")
-            label = row[0]
+            label = row[0].strip() + " - " + row[1]
             currency = row[9]
 
             stock_amount = data.Amount(D(row[4]), 'STK')
