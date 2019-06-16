@@ -44,7 +44,7 @@ class Importer(importer.ImporterProtocol):
     def _make_posting(self, account, amount=None):
         return data.Posting(account, amount, None, None, None, None)
 
-    def extract(self, f):
+    def extract(self, f, existing_entries=None):
         entries = []
 
         with open_file(f) as fd:
