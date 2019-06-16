@@ -38,6 +38,9 @@ class Importer(importer.ImporterProtocol):
         self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
+        if f.mimetype() != "text/csv":
+            return False
+
         with open_file(f) as f:
             return identify(f, "ccm", FIELDS)
 
