@@ -33,7 +33,7 @@ class InvalidZipArchive(Exception):
 
 @contextmanager
 def archive_file(f):
-    if f.name.endswith('.csv'):
+    if f.mimetype() == "text/csv":
         fd = open(f.name, encoding='iso-8859-1')
         try:
             yield fd
@@ -58,6 +58,10 @@ class Importer(importer.ImporterProtocol):
         self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
+        mimetype = f.mimetype()
+        if mimetype not in ["text/csv", "application/zip"]:
+            return False
+
         with archive_file(f) as f:
             return identify(f, "fortuneo", FIELDS)
 
