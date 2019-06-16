@@ -35,7 +35,6 @@ class Importer(importer.ImporterProtocol):
         csv.register_dialect("ccm", "excel", delimiter=";")
 
         self.checking_account = checking_account
-        self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
         if f.mimetype() != "text/csv":
@@ -97,20 +96,8 @@ class Importer(importer.ImporterProtocol):
 
                 # Create the postings.
 
-                second_account = "Unknown"
-
-                if self.invert_posting:
-                    first_posting = self._make_posting(self.checking_account, None)
-                    second_posting = self._make_posting(second_account, -amount.Amount(D(txn_amount), 'EUR'))
-
-                    txn.postings.append(second_posting)
-                    txn.postings.append(first_posting)
-                else:
-                    first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
-                    second_posting = self._make_posting(second_account)
-
-                    txn.postings.append(first_posting)
-                    txn.postings.append(second_posting)
+                first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
+                txn.postings.append(first_posting)
 
                 # Done
 

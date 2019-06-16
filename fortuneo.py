@@ -55,7 +55,6 @@ class Importer(importer.ImporterProtocol):
 
         self.checking_account = checking_account
         self.av_account = av_account
-        self.invert_posting = kwargs.get("invert_posting", False)
 
     def identify(self, f):
         mimetype = f.mimetype()
@@ -118,22 +117,8 @@ class Importer(importer.ImporterProtocol):
 
                 # Create the postings.
 
-                second_account = "Unknown"
-                if av_re.match(label):
-                    second_account = self.av_account
-
-                if self.invert_posting:
-                    first_posting = self._make_posting(self.checking_account, None)
-                    second_posting = self._make_posting(second_account, -amount.Amount(D(txn_amount), 'EUR'))
-
-                    txn.postings.append(second_posting)
-                    txn.postings.append(first_posting)
-                else:
-                    first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
-                    second_posting = self._make_posting(second_account)
-
-                    txn.postings.append(first_posting)
-                    txn.postings.append(second_posting)
+                first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
+                txn.postings.append(first_posting)
 
                 # Done
 
