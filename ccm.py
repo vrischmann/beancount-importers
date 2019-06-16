@@ -10,7 +10,7 @@ from beancount.core import amount
 from beancount.core import flags
 from beancount.core import data
 from beancount.ingest import importer
-from .helpers import identify
+from .helpers import identify, make_posting, parse_amount
 
 FIELDS = [
     "Date",
@@ -29,15 +29,6 @@ def open_file(f):
         yield fd
     finally:
         fd.close()
-
-
-def _parse_amount(s):
-    s = s.replace(',', '.')
-    return data.Amount(D(s), 'EUR')
-
-
-def _make_posting(account, amount=None):
-    return data.Posting(account, amount, None, None, None, None)
 
 
 class Importer(importer.ImporterProtocol):
@@ -106,7 +97,7 @@ class Importer(importer.ImporterProtocol):
 
                 # Create the postings.
 
-                first_posting = _make_posting(self.checking_account, txn_amount)
+                first_posting = make_posting(self.checking_account, txn_amount)
                 txn.postings.append(first_posting)
 
                 # Done
