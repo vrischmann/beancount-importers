@@ -4,6 +4,7 @@ import zipfile
 import io
 from contextlib import contextmanager
 from datetime import datetime
+from datetime import timedelta
 from beancount.core.number import D
 from beancount.core import amount
 from beancount.core import flags
@@ -30,6 +31,15 @@ def open_file(f):
         fd.close()
 
 
+def _parse_amount(s):
+    s = s.replace(',', '.')
+    return data.Amount(D(s), 'EUR')
+
+
+def _make_posting(account, amount=None):
+    return data.Posting(account, amount, None, None, None, None)
+
+
 class Importer(importer.ImporterProtocol):
     def __init__(self, checking_account, **kwargs):
         csv.register_dialect("ccm", "excel", delimiter=";")
@@ -43,11 +53,11 @@ class Importer(importer.ImporterProtocol):
         with open_file(f) as f:
             return identify(f, "ccm", FIELDS)
 
-    def _make_posting(self, account, amount=None):
-        return data.Posting(account, amount, None, None, None, None)
-
     def extract(self, f, existing_entries=None):
         entries = []
+
+        row = None
+        row_date = None
 
         with open_file(f) as fd:
             rd = csv.reader(fd, dialect="ccm")
@@ -77,7 +87,7 @@ class Importer(importer.ImporterProtocol):
                 txn_amount = row[2]
                 if txn_amount == '':
                     txn_amount = row[3]
-                txn_amount = txn_amount.replace(',', '.')
+                txn_amount = _parse_amount(txn_amount)
 
                 # Prepare the transaction
 
@@ -96,7 +106,7 @@ class Importer(importer.ImporterProtocol):
 
                 # Create the postings.
 
-                first_posting = self._make_posting(self.checking_account, amount.Amount(D(txn_amount), 'EUR'))
+                first_posting = _make_posting(self.checking_account, txn_amount)
                 txn.postings.append(first_posting)
 
                 # Done
@@ -104,5 +114,16 @@ class Importer(importer.ImporterProtocol):
                 entries.append(txn)
 
                 line_index += 1
+
+        if line_index > 0:
+            balance_check = data.Balance(
+                meta=data.new_metadata(f.name, line_index + 1),
+                date=row_date.date() + timedelta(days=1),
+                account=self.checking_account,
+                amount=_parse_amount(row[5]),
+                diff_amount=None,
+                tolerance=None,
+            )
+            entries.append(balance_check)
 
         return entries
