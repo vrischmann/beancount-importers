@@ -44,8 +44,7 @@ def archive_file(f):
 
     with zipfile.ZipFile(f.name, 'r') as zf:
         for name in zf.namelist():
-            if name.startswith('HistoriqueOperations') and name.endswith(
-                    '.csv'):
+            if name.startswith('HistoriqueOperations') and name.endswith('.csv'):
                 with zf.open(name) as f:
                     yield io.TextIOWrapper(f, encoding='iso-8859-1')
 
