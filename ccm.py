@@ -78,7 +78,7 @@ class Importer(importer.ImporterProtocol):
                 txn_amount = row[2]
                 if txn_amount == '':
                     txn_amount = row[3]
-                txn_amount = _parse_amount(txn_amount)
+                txn_amount = parse_amount(txn_amount)
 
                 # Prepare the transaction
 
@@ -111,7 +111,7 @@ class Importer(importer.ImporterProtocol):
                 meta=data.new_metadata(f.name, line_index + 1),
                 date=row_date.date() + timedelta(days=1),
                 account=self.checking_account,
-                amount=_parse_amount(row[5]),
+                amount=parse_amount(row[5]),
                 diff_amount=None,
                 tolerance=None,
             )
