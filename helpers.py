@@ -1,8 +1,6 @@
 from beancount.core import data
 from beancount.core.number import D
 from typing import List, Iterable
-import beangulp.extract
-import beangulp.similar
 import csv
 
 
