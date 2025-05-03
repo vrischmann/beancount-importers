@@ -1,10 +1,12 @@
-import io
-import csv
-from beancount.core.number import D
 from beancount.core import data
+from beancount.core.number import D
+from typing import List, Iterable
+import beangulp.extract
+import beangulp.similar
+import csv
 
 
-def identify(rd: io.TextIOBase, dialect: str, fields: [str]):
+def identify(rd: Iterable[str], dialect: str, fields: List[str]) -> bool:
     rd = csv.reader(rd, dialect=dialect)
     for row in rd:
         if set(row) != set(fields):
@@ -20,5 +22,5 @@ def make_posting(account, amount=None):
 
 
 def parse_amount(s):
-    s = s.replace(',', '.')
-    return data.Amount(D(s), 'EUR')
+    s = s.replace(",", ".")
+    return data.Amount(D(s), "EUR")

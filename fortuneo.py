@@ -10,48 +10,32 @@ from beancount.core import amount
 from beancount.core import flags
 from beancount.core import data
 from beancount.core import position
-from beancount.ingest import importer
+from beangulp import Importer
 from .helpers import identify, make_posting, parse_amount
-
-FIELDS = [
-    "Date opération",
-    "Date valeur",
-    "libellé",
-    "Débit",
-    "Crédit",
-    "",
-]
-STOCK_FIELDS = [
-    "libellé",
-    "Opération",
-    "Place",
-    "Date",
-    "Qté",
-    "Prix d'éxé",
-    "Montant brut",
-    "Courtage/Prélèvement",
-    "Montant net",
-    "Devise",
-    "",
-]
-
-av_re = re.compile("vrst (fortuneo vie|symphonis-vie)")
-normal_operations_re = re.compile("HistoriqueOperations_.+")
-stock_operations_re = re.compile("HistoriqueOperationsBourse_.+")
+from typing import IO
 
 
 class InvalidFormatError(Exception):
+    """Exception raised when the format of the file is not as expected."""
+
     pass
 
 
 class InvalidZipArchive(Exception):
+    """Exception raised when the zip archive is not valid."""
+
     pass
 
 
 @contextmanager
-def archive_file(f):
+def archive_file(filepath: str) -> IO[str]:
+    """
+    Context manager for handling files from a Fortuneo export.
+    Supports both standalone CSV files and CSV files within a zip archive.
+    """
+
     if f.mimetype() == "text/csv":
-        fd = open(f.name, encoding='iso-8859-1')
+        fd = open(filename, encoding="iso-8859-1")
         try:
             yield fd
         finally:
@@ -59,55 +43,56 @@ def archive_file(f):
 
         return
 
-    with zipfile.ZipFile(f.name, 'r') as zf:
+    with zipfile.ZipFile(f.name, "r") as zf:
         for name in zf.namelist():
-            if name.startswith('HistoriqueOperations') and name.endswith('.csv'):
+            if name.startswith("HistoriqueOperations") and name.endswith(".csv"):
                 with zf.open(name) as f:
-                    yield io.TextIOWrapper(f, encoding='iso-8859-1')
+                    yield io.TextIOWrapper(f, encoding="iso-8859-1")
 
 
-class Importer(importer.ImporterProtocol):
-    def __init__(self, checking_account, av_account, stock_account, **kwargs):
+class CheckingAccountImporter(Importer):
+    """
+    Importer for Fortuneo checking account statements.
+    """
+
+    FIELDS = [
+        "Date opération",
+        "Date valeur",
+        "libellé",
+        "Débit",
+        "Crédit",
+        "",
+    ]
+
+    FILENAME_RE = re.compile("HistoriqueOperations_.+")
+
+    def __init__(self, account_name: str):
         csv.register_dialect("fortuneo", "excel", delimiter=";")
 
-        self.checking_account = checking_account
-        self.av_account = av_account
-        self.stock_account = stock_account
+        self.account_name = account_name
 
-        if "broker_fees_account" in kwargs:
-            self.broker_fees_account = kwargs["broker_fees_account"]
-        else:
-            self.broker_fees_account = "Expenses:Fortuneo:BrokerFees"
-
-    def identify(self, f):
-        mimetype = f.mimetype()
-        if mimetype not in ["text/csv", "application/zip"]:
+    def identify(self, filepath: str) -> bool:
+        if not filepath.endswith(".zip"):
             return False
 
-        filename = os.path.basename(f.name)
-
-        if normal_operations_re.match(filename):
+        filename = os.path.basename(filpath)
+        if FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return identify(f, "fortuneo", FIELDS)
 
-        if stock_operations_re.match(filename):
-            with archive_file(f) as f:
-                return identify(f, "fortuneo", STOCK_FIELDS)
-
         return False
 
-    def extract(self, f, existing_entries=None):
-        filename = os.path.basename(f.name)
+    def account(self, filepath: str) -> data.Account:
+        return self.account_name
 
-        if normal_operations_re.match(filename):
+    def extract(self, filepath: str, existing_entries=None):
+        filename = os.path.basename(filepath)
+
+        if FILENAME_RE.match(filename):
             with archive_file(f) as f:
-                return self._extract_normal_operations(f.name, f)
+                return self._extract(f.name, f)
 
-        if stock_operations_re.match(filename):
-            with archive_file(f) as f:
-                return self._extract_stock_operations(f.name, f)
-
-    def _extract_normal_operations(self, filename, rd):
+    def _extract(self, filename, rd):
         rd = csv.reader(rd, dialect="fortuneo")
 
         entries = []
@@ -134,7 +119,7 @@ class Importer(importer.ImporterProtocol):
             label = row[2]
 
             txn_amount = row[3]
-            if txn_amount == '':
+            if txn_amount == "":
                 txn_amount = row[4]
             txn_amount = parse_amount(txn_amount)
 
@@ -165,7 +150,57 @@ class Importer(importer.ImporterProtocol):
 
         return entries
 
-    def _extract_stock_operations(self, filename, rd):
+
+class StockAccountImporter(Importer):
+    """
+    Importer for Fortuneo stock account transactions.
+    """
+
+    FIELDS = [
+        "libellé",
+        "Opération",
+        "Place",
+        "Date",
+        "Qté",
+        "Prix d'éxé",
+        "Montant brut",
+        "Courtage/Prélèvement",
+        "Montant net",
+        "Devise",
+        "",
+    ]
+
+    FILENAME_RE = re.compile("HistoriqueOperationsBourse_.+")
+
+    def __init__(self, account_name: str, broker_fees_account: str):
+        csv.register_dialect("fortuneo", "excel", delimiter=";")
+
+        self.account_name = account_name
+        self.broker_fees_account = broker_fees_account
+
+    def identify(self, filepath: str) -> bool:
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext != "zip":
+            return False
+
+        filename = os.path.basename(filepath)
+        if FILENAME_RE.match(filename):
+            with archive_file(f) as f:
+                return identify(f, "fortuneo", FIELDS)
+
+        return False
+
+    def account(self, filepath: str) -> data.Account:
+        return self.checking_account
+
+    def extract(self, filepath: str, existing_entries=None):
+        filename = os.path.basename(filepath)
+
+        if FILENAME_RE.match(filename):
+            with archive_file(f) as f:
+                return self._extract(f.name, f)
+
+    def _extract(self, filename, rd):
         rd = csv.reader(rd, dialect="fortuneo")
 
         entries = []
@@ -175,7 +210,7 @@ class Importer(importer.ImporterProtocol):
         for row in rd:
             # Check header
             if header:
-                if set(row) != set(STOCK_FIELDS):
+                if set(row) != set(FIELDS):
                     raise InvalidFormatError()
                 header = False
 
@@ -183,7 +218,7 @@ class Importer(importer.ImporterProtocol):
 
                 continue
 
-            if len(row) != len(STOCK_FIELDS):
+            if len(row) != len(FIELDS):
                 continue
 
             # Extract data
@@ -192,7 +227,7 @@ class Importer(importer.ImporterProtocol):
             label = row[0].strip() + " - " + row[1]
             currency = row[9]
 
-            stock_amount = data.Amount(D(row[4]), 'STK')
+            stock_amount = data.Amount(D(row[4]), "STK")
             stock_cost = position.Cost(
                 number=D(row[5]),
                 currency=currency,
@@ -217,8 +252,19 @@ class Importer(importer.ImporterProtocol):
 
             # Create the postings.
 
-            txn.postings.append(data.Posting(account="Assets:Stock:STK", units=stock_amount, cost=stock_cost, price=None, flag=None, meta=None))
-            txn.postings.append(make_posting(self.broker_fees_account, -parse_amount(row[7])))
+            txn.postings.append(
+                data.Posting(
+                    account="Assets:Stock:STK",
+                    units=stock_amount,
+                    cost=stock_cost,
+                    price=None,
+                    flag=None,
+                    meta=None,
+                )
+            )
+            txn.postings.append(
+                make_posting(self.broker_fees_account, -parse_amount(row[7]))
+            )
             txn.postings.append(make_posting(self.stock_account, parse_amount(row[8])))
 
             # Done
