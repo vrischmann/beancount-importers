@@ -34,7 +34,7 @@ def archive_file(filepath: str) -> IO[str]:
     Supports both standalone CSV files and CSV files within a zip archive.
     """
 
-    if f.mimetype() == "text/csv":
+    if filepath.endswith("csv"):
         fd = open(filename, encoding="iso-8859-1")
         try:
             yield fd
