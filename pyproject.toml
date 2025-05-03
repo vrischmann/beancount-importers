@@ -13,6 +13,11 @@ dependencies = [
     "beangulp (>=0.2.0,<0.3.0)"
 ]
 
+[tool.poetry]
+packages = [
+    { include = "beancount_ccm" },
+    { include = "beancount_fortuneo" },
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
