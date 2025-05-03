@@ -1,18 +1,18 @@
-import csv
-import re
-import zipfile
-import io
-import os.path
+from .helpers import identify, make_posting, parse_amount
+from beancount.core import amount
+from beancount.core import data
+from beancount.core import flags
+from beancount.core import position
+from beancount.core.number import D
+from beangulp import Importer
 from contextlib import contextmanager
 from datetime import datetime
-from beancount.core.number import D
-from beancount.core import amount
-from beancount.core import flags
-from beancount.core import data
-from beancount.core import position
-from beangulp import Importer
-from .helpers import identify, make_posting, parse_amount
 from typing import IO
+import csv
+import io
+import os.path
+import re
+import zipfile
 
 
 class InvalidFormatError(Exception):
