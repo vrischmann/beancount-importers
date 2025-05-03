@@ -78,7 +78,7 @@ class CheckingAccountImporter(Importer):
         filename = os.path.basename(filepath)
         if self.FILENAME_RE.match(filename):
             with archive_file(filepath) as f:
-                return identify(f, "fortuneo", FIELDS)
+                return identify(f, "fortuneo", self.FIELDS)
 
         return False
 
@@ -102,7 +102,7 @@ class CheckingAccountImporter(Importer):
         for row in rd:
             # Check header
             if header:
-                if set(row) != set(FIELDS):
+                if set(row) != set(self.FIELDS):
                     raise InvalidFormatError()
                 header = False
 
@@ -186,7 +186,7 @@ class StockAccountImporter(Importer):
         filename = os.path.basename(filepath)
         if self.FILENAME_RE.match(filename):
             with archive_file(filepath) as f:
-                return identify(f, "fortuneo", FIELDS)
+                return identify(f, "fortuneo", self.FIELDS)
 
         return False
 
@@ -210,7 +210,7 @@ class StockAccountImporter(Importer):
         for row in rd:
             # Check header
             if header:
-                if set(row) != set(FIELDS):
+                if set(row) != set(self.FIELDS):
                     raise InvalidFormatError()
                 header = False
 
@@ -218,7 +218,7 @@ class StockAccountImporter(Importer):
 
                 continue
 
-            if len(row) != len(FIELDS):
+            if len(row) != len(self.FIELDS):
                 continue
 
             # Extract data
