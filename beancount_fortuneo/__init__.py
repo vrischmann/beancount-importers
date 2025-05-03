@@ -1,4 +1,4 @@
-from .helpers import identify, make_posting, parse_amount
+from beancount_helpers import identify, make_posting, parse_amount
 from beancount.core import amount
 from beancount.core import data
 from beancount.core import flags

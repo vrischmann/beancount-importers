@@ -17,6 +17,7 @@ dependencies = [
 packages = [
     { include = "beancount_ccm" },
     { include = "beancount_fortuneo" },
+    { include = "beancount_helpers" },
 ]
 
 [build-system]
