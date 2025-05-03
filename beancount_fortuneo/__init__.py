@@ -140,7 +140,7 @@ class CheckingAccountImporter(Importer):
 
             # Create the postings.
 
-            txn.postings.append(make_posting(self.checking_account, txn_amount))
+            txn.postings.append(make_posting(self.account_name, txn_amount))
 
             # Done
 
@@ -191,7 +191,7 @@ class StockAccountImporter(Importer):
         return False
 
     def account(self, filepath: str) -> data.Account:
-        return self.checking_account
+        return self.account_name
 
     def extract(self, filepath: str, existing_entries=None):
         filename = os.path.basename(filepath)
