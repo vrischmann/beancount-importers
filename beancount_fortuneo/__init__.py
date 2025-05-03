@@ -43,7 +43,7 @@ def archive_file(filepath: str) -> IO[str]:
 
         return
 
-    with zipfile.ZipFile(f.name, "r") as zf:
+    with zipfile.ZipFile(filepath, "r") as zf:
         for name in zf.namelist():
             if name.startswith("HistoriqueOperations") and name.endswith(".csv"):
                 with zf.open(name) as f:
