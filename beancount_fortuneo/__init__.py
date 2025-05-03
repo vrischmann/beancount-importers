@@ -75,7 +75,7 @@ class CheckingAccountImporter(Importer):
         if not filepath.endswith(".zip"):
             return False
 
-        filename = os.path.basename(filpath)
+        filename = os.path.basename(filepath)
         if FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return identify(f, "fortuneo", FIELDS)
