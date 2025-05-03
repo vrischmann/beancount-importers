@@ -76,7 +76,7 @@ class CheckingAccountImporter(Importer):
             return False
 
         filename = os.path.basename(filepath)
-        if FILENAME_RE.match(filename):
+        if self.FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return identify(f, "fortuneo", FIELDS)
 
@@ -88,7 +88,7 @@ class CheckingAccountImporter(Importer):
     def extract(self, filepath: str, existing_entries=None):
         filename = os.path.basename(filepath)
 
-        if FILENAME_RE.match(filename):
+        if self.FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return self._extract(f.name, f)
 
@@ -184,7 +184,7 @@ class StockAccountImporter(Importer):
             return False
 
         filename = os.path.basename(filepath)
-        if FILENAME_RE.match(filename):
+        if self.FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return identify(f, "fortuneo", FIELDS)
 
@@ -196,7 +196,7 @@ class StockAccountImporter(Importer):
     def extract(self, filepath: str, existing_entries=None):
         filename = os.path.basename(filepath)
 
-        if FILENAME_RE.match(filename):
+        if self.FILENAME_RE.match(filename):
             with archive_file(f) as f:
                 return self._extract(f.name, f)
 
