@@ -179,8 +179,7 @@ class StockAccountImporter(Importer):
         self.broker_fees_account = broker_fees_account
 
     def identify(self, filepath: str) -> bool:
-        ext = os.path.splitext(filepath)[1].lower()
-        if ext != "zip":
+        if not filepath.endswith(".zip"):
             return False
 
         filename = os.path.basename(filepath)
