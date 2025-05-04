@@ -264,7 +264,7 @@ class StockAccountImporter(Importer):
             txn.postings.append(
                 make_posting(self.broker_fees_account, -parse_amount(row[7]))
             )
-            txn.postings.append(make_posting(self.stock_account, parse_amount(row[8])))
+            txn.postings.append(make_posting(self.account_name, parse_amount(row[8])))
 
             # Done
 
