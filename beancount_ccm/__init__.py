@@ -14,6 +14,11 @@ import re
 import zipfile
 
 
+class InvalidFormatError(Exception):
+    """Exception raised when the format of the file is not as expected."""
+    pass
+
+
 @contextmanager
 def open_file(filepath: str) -> IO[str]:
     """

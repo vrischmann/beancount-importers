@@ -35,7 +35,7 @@ def archive_file(filepath: str) -> IO[str]:
     """
 
     if filepath.endswith("csv"):
-        fd = open(filename, encoding="iso-8859-1")
+        fd = open(filepath, encoding="iso-8859-1")
         try:
             yield fd
         finally:
