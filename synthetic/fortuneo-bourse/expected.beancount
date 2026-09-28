@@ -1,0 +1,92 @@
+;; Ground truth for the synthetic Fortuneo Bourse export:
+;;   HistoriqueOperationsBourse_000000000000_du_01_07_2025_au_30_06_2026.csv
+;;
+;; This file is self-contained and must pass `bean-check`.
+;; The option block at the top is the account-root mapping used by the
+;; target ledger; companies, tickers, amounts and dates are synthetic.
+;;
+;; Conventions implemented here (see README.md):
+;; - Achat Comptant: shares at unit price, courtage in
+;;   Dépenses:FraisBancaires:Courtage, PEA:Cash debited with the net amount.
+;; - Vente comptant: shares credited at sale price (no cost basis in the
+;;   posting), courtage expensed, PEA:Cash credited with the net amount.
+;; - Encaissement coupons: Revenu:UC:Actions:<TICKER> + PEA:Cash, no shares.
+;; - OST de création ... (0.00 EUR): shares credited at {0 EUR}, single
+;;   posting.
+;; - "Détachement coupon optionnel" / "ANNUL. OST" rows: ignored, they are
+;;   bookkeeping noise around the real "Encaissement coupons" event.
+
+option "name_assets" "Actifs"
+option "name_liabilities" "Passifs"
+option "name_expenses" "Dépenses"
+option "name_income" "Revenu"
+option "name_equity" "Capital"
+option "operating_currency" "EUR"
+
+2025-01-01 open Actifs:Fortuneo:Courant                EUR
+2025-01-01 open Actifs:Fortuneo:PEA:Cash               EUR
+2025-01-01 open Actifs:Fortuneo:PEA:UC:Actions:ACME    ACME
+2025-01-01 open Actifs:Fortuneo:PEA:UC:Actions:BETA    BETA
+2025-01-01 open Actifs:Fortuneo:PEA:UC:Actions:DELTA   DELTA
+2025-01-01 open Actifs:Fortuneo:PEA:UC:Trackers:GWETF  GWETF
+2025-01-01 open Dépenses:FraisBancaires:Courtage
+2025-01-01 open Revenu:UC:Actions:ACME
+
+;; Seed the PEA cash account (not part of the Bourse export).
+2025-07-01 * "VIR S/ PEA"
+  Actifs:Fortuneo:Courant                                    -5000.00 EUR
+  Actifs:Fortuneo:PEA:Cash                                    5000.00 EUR
+
+;; row: GAMMA WORLD UCITS ETF - Acc EUR ACC; Achat Comptant; 02/07/2025
+2025-07-02 * "Fortuneo" "GAMMA WORLD UCITS ETF - Acc EUR ACC - Achat Comptant"
+  Actifs:Fortuneo:PEA:UC:Trackers:GWETF                       80 GWETF {5.55 EUR, 2025-07-02}
+  Dépenses:FraisBancaires:Courtage                             1.78 EUR
+  Actifs:Fortuneo:PEA:Cash                                    -445.78 EUR
+
+;; row: BETA INDUSTRIES; Achat Comptant; 04/08/2025
+2025-08-04 * "Fortuneo" "BETA INDUSTRIES - Achat Comptant"
+  Actifs:Fortuneo:PEA:UC:Actions:BETA                         10 BETA {88.90 EUR, 2025-08-04}
+  Dépenses:FraisBancaires:Courtage                             1.50 EUR
+  Actifs:Fortuneo:PEA:Cash                                    -890.50 EUR
+
+;; row: BETA INDUSTRIES; OST ... Attribution automatique; 18/09/2025
+2025-09-18 * "BETA INDUSTRIES - OST de création avec ou sans droits - Attribution automatique"
+  Actifs:Fortuneo:PEA:UC:Actions:BETA                          3 BETA {0 EUR, 2025-09-18}
+
+;; row: ACME CORP; Achat Comptant; 30/11/2025
+2025-11-30 * "Fortuneo" "ACME CORP - Achat Comptant"
+  Actifs:Fortuneo:PEA:UC:Actions:ACME                        100 ACME {12.34 EUR, 2025-11-30}
+  Dépenses:FraisBancaires:Courtage                             2.00 EUR
+  Actifs:Fortuneo:PEA:Cash                                   -1236.00 EUR
+
+;; row: DELTA SA; OST ... Souscription avec droit; 12/01/2026
+2026-01-12 * "DELTA SA - OST de création avec ou sans droits - Souscription avec droit"
+  Actifs:Fortuneo:PEA:UC:Actions:DELTA                       250 DELTA {0 EUR, 2026-01-12}
+
+;; row: ACME CORP; Vente comptant; 05/03/2026
+2026-03-05 * "Fortuneo" "ACME CORP - Vente comptant"
+  Actifs:Fortuneo:PEA:UC:Actions:ACME                         -50 ACME @ 14.00 EUR
+  Dépenses:FraisBancaires:Courtage                             2.00 EUR
+  Actifs:Fortuneo:PEA:Cash                                     698.00 EUR
+
+;; rows ignored (noise cluster of 26/04/2026):
+;;   ACME CORP; OST de création de coupons - Détachement coupon optionnel; 25.00 EUR
+;;   ACME CORP; OST de création de coupons - Détachement coupon optionnel; 28.40 USD
+;;   ACME CORP; ANNUL. OST de création de coupons - Détachement coupon optionnel; -28.40 USD
+
+;; row: ACME CORP; Encaissement coupons intérêt/dividende; 28/04/2026
+2026-04-28 * "Fortuneo" "ACME CORP - Encaissement coupons intérêt/dividende"
+  Revenu:UC:Actions:ACME
+  Actifs:Fortuneo:PEA:Cash                                     25.00 EUR
+
+;; row: GAMMA WORLD UCITS ETF - Acc EUR ACC; Achat Comptant; 15/06/2026
+2026-06-15 * "Fortuneo" "GAMMA WORLD UCITS ETF - Acc EUR ACC - Achat Comptant"
+  Actifs:Fortuneo:PEA:UC:Trackers:GWETF                      120 GWETF {5.60 EUR, 2026-06-15}
+  Dépenses:FraisBancaires:Courtage                             2.69 EUR
+  Actifs:Fortuneo:PEA:Cash                                    -674.69 EUR
+
+2026-06-16 balance Actifs:Fortuneo:PEA:Cash                     2476.03 EUR
+2026-06-16 balance Actifs:Fortuneo:PEA:UC:Actions:ACME              50 ACME
+2026-06-16 balance Actifs:Fortuneo:PEA:UC:Actions:BETA              13 BETA
+2026-06-16 balance Actifs:Fortuneo:PEA:UC:Actions:DELTA           250 DELTA
+2026-06-16 balance Actifs:Fortuneo:PEA:UC:Trackers:GWETF          200 GWETF

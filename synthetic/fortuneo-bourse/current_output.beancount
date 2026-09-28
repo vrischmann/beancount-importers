@@ -1,0 +1,60 @@
+;; -*- mode: beancount -*-
+
+**** /Users/vincent/dev/perso/projects/ledger/synthetic/fortuneo-bourse/HistoriqueOperationsBourse_000000000000_du_01_07_2025_au_30_06_2026.zip
+
+2025-07-02 * "GAMMA WORLD UCITS ETF - Acc EUR ACC - Achat Comptant"
+  Assets:Stock:STK                     80.0 STK {5.55 EUR, 2025-07-02}
+  Dépenses:FraisBancaires:Courtage     1.78 EUR
+  Actifs:Fortuneo:PEA:Cash          -445.78 EUR
+
+2025-08-04 * "BETA INDUSTRIES - Achat Comptant"
+  Assets:Stock:STK                    10.0 STK {88.9 EUR, 2025-08-04}
+  Dépenses:FraisBancaires:Courtage     1.5 EUR
+  Actifs:Fortuneo:PEA:Cash          -890.5 EUR
+
+2025-09-18 * "BETA INDUSTRIES - OST de création avec ou sans droits - Attribution automatique"
+  Assets:Stock:STK                  3.0 STK {0.0 EUR, 2025-09-18}
+  Dépenses:FraisBancaires:Courtage  0.0 EUR
+  Actifs:Fortuneo:PEA:Cash          0.0 EUR
+
+2025-11-30 * "ACME CORP - Achat Comptant"
+  Assets:Stock:STK                    100.0 STK {12.34 EUR, 2025-11-30}
+  Dépenses:FraisBancaires:Courtage      2.0 EUR
+  Actifs:Fortuneo:PEA:Cash          -1236.0 EUR
+
+2026-01-12 * "DELTA SA - OST de création avec ou sans droits - Souscription avec droit"
+  Assets:Stock:STK                  250.0 STK {0.0 EUR, 2026-01-12}
+  Dépenses:FraisBancaires:Courtage    0.0 EUR
+  Actifs:Fortuneo:PEA:Cash            0.0 EUR
+
+2026-03-05 * "ACME CORP - Vente comptant"
+  Assets:Stock:STK                   50.0 STK {14.0 EUR, 2026-03-05}
+  Dépenses:FraisBancaires:Courtage    2.0 EUR
+  Actifs:Fortuneo:PEA:Cash          698.0 EUR
+
+2026-04-26 * "ACME CORP - OST de création de coupons - Détachement coupon optionnel"
+  Assets:Stock:STK                  50.0 STK {0.0 EUR, 2026-04-26}
+  Dépenses:FraisBancaires:Courtage   0.0 EUR
+  Actifs:Fortuneo:PEA:Cash          25.0 EUR
+
+2026-04-26 * "ACME CORP - OST de création de coupons - Détachement coupon optionnel"
+  Assets:Stock:STK                  50.0 STK {0.0 USD, 2026-04-26}
+  Dépenses:FraisBancaires:Courtage   0.0 EUR
+  Actifs:Fortuneo:PEA:Cash          28.4 EUR
+
+2026-04-26 * "ACME CORP - ANNUL. OST de création de coupons - Détachement coupon optionnel"
+  Assets:Stock:STK                   50.0 STK {0.0 USD, 2026-04-26}
+  Dépenses:FraisBancaires:Courtage    0.0 EUR
+  Actifs:Fortuneo:PEA:Cash          -28.4 EUR
+
+2026-04-28 * "ACME CORP - Encaissement coupons intérêt/dividende"
+  Assets:Stock:STK                  50.0 STK {0.0 EUR, 2026-04-28}
+  Dépenses:FraisBancaires:Courtage   0.0 EUR
+  Actifs:Fortuneo:PEA:Cash          25.0 EUR
+
+2026-06-15 * "GAMMA WORLD UCITS ETF - Acc EUR ACC - Achat Comptant"
+  Assets:Stock:STK                    120.0 STK {5.6 EUR, 2026-06-15}
+  Dépenses:FraisBancaires:Courtage     2.69 EUR
+  Actifs:Fortuneo:PEA:Cash          -674.69 EUR
+
+
