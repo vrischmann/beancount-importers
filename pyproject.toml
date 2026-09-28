@@ -19,3 +19,8 @@ packages = ["beancount_ccm", "beancount_fortuneo", "beancount_helpers"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
