@@ -112,3 +112,8 @@ posting, dropped row or wrong direction makes the check fail.
   broker label in `fortuneo-label` metadata, `open` directives under
   the assets root map tickers to accounts, and income accounts are the
   asset accounts with the assets root replaced by the income root.
+- A label no commodity declares exactly is matched as text before the
+  import gives up — see “Resolving a security from the broker label”
+  in the repo README for the tiers and for why an ambiguous match
+  aborts instead of guessing. `tests/test_fortuneo_label_resolution.py`
+  covers that path.

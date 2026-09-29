@@ -10,11 +10,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import IO, Callable
 import csv
+import difflib
 import enum
 import io
+import logging
 import os.path
 import re
+import unicodedata
 import zipfile
+
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidFormatError(Exception):
@@ -50,6 +56,16 @@ class Security:
     income_account: str
 
 
+@dataclass(frozen=True)
+class LabelMatch:
+    """A candidate label for a broker label, with the strength of the match."""
+
+    ticker: str
+    label: str
+    score: float
+    how: str
+
+
 class OperationType(enum.Enum):
     """The kinds of rows the stock account importer knows about."""
 
@@ -73,6 +89,182 @@ def _quantize(number: Decimal) -> Decimal:
     """Round to the two decimal places of the target ledger convention."""
 
     return number.quantize(TWO_PLACES)
+
+
+# --- Resolution of broker labels onto commodities ------------------------------
+#
+# The Bourse export has no ticker column and no ISIN column: the libellé free
+# text is the only thing identifying the security. A commodity directive
+# therefore declares the label it is known as, and the importer joins on it.
+
+#: Words carrying no security identity: wrappers, share classes and legal
+#: forms. Dropping them is what lets a rights-issue row printed as
+#: "ACME CORP DS" resolve to the "ACME CORP" commodity. Kept short on purpose:
+#: the longer the list, the more distinct funds look alike, and the ambiguity
+#: guard below then refuses to guess at all.
+LABEL_NOISE_TOKENS = frozenset({
+    "UCITS", "ETF", "PEA", "ACC", "ACCUM", "ACCUMULATION", "ACCUR", "CAP",
+    "DIST", "DISTRIBUTION", "DIS", "EUR", "USD",
+    "SA", "SE", "SCA", "SCM", "PLC", "NV", "AG", "SPA", "ASA", "ADR",
+    "II", "III", "IV", "DR", "THE", "DE", "LA", "LE", "DU", "DS",
+})
+
+CONTAINMENT_MINIMUM = 0.60
+
+#: How far the best ticker must stand above the runner-up ticker. Two share
+#: classes of the same fund produce high scores for both; the margin is what
+#: keeps the importer from choosing one.
+AMBIGUITY_MARGIN = 0.15
+
+#: Below this, a candidate is not worth reporting in an error message.
+SUGGESTION_FLOOR = 0.25
+
+
+def _normalize_label(label: str) -> str:
+    """Fold case, accents and punctuation so the broker's wording and the
+    ledger's metadata can be compared as plain text."""
+
+    folded = unicodedata.normalize("NFD", label.upper())
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+
+    return re.sub(r"[^A-Z0-9]+", " ", folded).strip()
+
+
+def _label_tokens(normalized: str) -> set:
+    """The words of a normalized label, single letters dropped."""
+
+    return {token for token in normalized.split() if len(token) > 1}
+
+
+def _identity_tokens(tokens: set) -> set:
+    """The tokens of a label with the wrapper noise removed, never empty."""
+
+    kept = tokens - LABEL_NOISE_TOKENS
+
+    return kept or tokens
+
+
+def _score_label(query: str, candidate: str) -> tuple:
+    """Score how well candidate names the security of query, as (score, how)."""
+
+    normalized_query = _normalize_label(query)
+    normalized_candidate = _normalize_label(candidate)
+
+    if normalized_query == normalized_candidate:
+        return 1.0, "exact after normalisation"
+
+    query_tokens = _identity_tokens(_label_tokens(normalized_query))
+    candidate_tokens = _identity_tokens(_label_tokens(normalized_candidate))
+    common = query_tokens & candidate_tokens
+    union = query_tokens | candidate_tokens
+
+    overlap = len(common) / len(union) if union else 0.0
+    ratio = difflib.SequenceMatcher(None, normalized_query, normalized_candidate).ratio()
+
+    if common and (query_tokens <= candidate_tokens or candidate_tokens <= query_tokens):
+        return max(overlap, ratio * 0.95), "token containment"
+
+    # Partial overlap: the long fund names that differ mostly in wrapper words.
+    return max(ratio, overlap + (0.15 if len(common) >= 2 else 0.0)), "similarity"
+
+
+class SecurityResolver:
+    """Resolve a broker label onto a Security.
+
+    An exact label match decides, as it always did. Failing that, the ledger's
+    labels are scored as text and a match is accepted only when it is strong
+    (exact once normalized, or a token containment) and no other ticker comes
+    close. Everything weaker aborts with the ranked candidates quoted, so the
+    operator adds the missing metadata instead of trusting a guess.
+
+    With fuzzy=True the weaker similarity tier is accepted too, on the same
+    uniqueness condition; each automatic decision is logged as a warning.
+    """
+
+    def __init__(self, aliases, ticker_to_account, assets_root, income_root, exact, fuzzy=False):
+        self.aliases = aliases
+        self.ticker_to_account = ticker_to_account
+        self.assets_root = assets_root
+        self.income_root = income_root
+        self.exact = exact
+        self.fuzzy = fuzzy
+
+    def resolve(self, label: str) -> Security:
+        """Return the Security of a broker label, or raise UnknownSecurityError."""
+
+        ticker = self.exact.get(label)
+        if ticker is not None:
+            return self._security(ticker, label)
+
+        best = self.suggest(label)
+        if best:
+            (top, ) = best[:1]
+            runner_up = next((m.score for m in best[1:] if m.ticker != top.ticker), 0.0)
+
+            strong = (
+                top.how == "exact after normalisation"
+                or (top.how == "token containment" and top.score >= CONTAINMENT_MINIMUM)
+                or (self.fuzzy and top.how == "similarity")
+            )
+            if strong and top.score - runner_up >= AMBIGUITY_MARGIN:
+                logger.warning(
+                    "resolved the label %r as %s (%s, score %.2f); make it official with a "
+                    'fortuneo-label: "%s" metadata entry on commodity %s',
+                    label, top.ticker, top.how, top.score, label, top.ticker,
+                )
+
+                return self._security(top.ticker, label)
+
+        raise self._failure(label, best)
+
+    def suggest(self, label: str) -> list:
+        """Rank the ledger labels closest to a broker label, best ticker first."""
+
+        scored = []
+        for ticker, labels in self.aliases.items():
+            for candidate in labels:
+                score, how = _score_label(label, candidate)
+                if score >= SUGGESTION_FLOOR:
+                    scored.append(LabelMatch(ticker=ticker, label=candidate, score=score, how=how))
+
+        by_ticker = {}
+        for match in scored:
+            previous = by_ticker.get(match.ticker)
+            if previous is None or match.score > previous.score:
+                by_ticker[match.ticker] = match
+
+        return sorted(by_ticker.values(), key=lambda match: -match.score)
+
+    def _security(self, ticker, label) -> Security:
+        account = self.ticker_to_account.get(ticker)
+        if account is None:
+            raise UnknownSecurityError(f"commodity {ticker} (label {label!r}) has no open account under {self.assets_root}")
+
+        income_account = self.income_root + account[len(self.assets_root):]
+
+        return Security(ticker=ticker, account=account, income_account=income_account)
+
+    def _failure(self, label, suggestions) -> UnknownSecurityError:
+        # Naming a ticker is only helpful when one really looks like the label;
+        # a 0.3 match would point the operator at the wrong commodity.
+        probable = suggestions[0] if suggestions and suggestions[0].score >= CONTAINMENT_MINIMUM else None
+
+        message = (
+            f"no commodity directive in the ledger declares the label {label!r}. "
+            "Add a fortuneo-label metadata entry carrying it, e.g."
+            f"\n  commodity {probable.ticker if probable else '<TICKER>'}"
+            f'\n    fortuneo-label: "{label}"'
+        )
+
+        if not suggestions:
+            return UnknownSecurityError(message + "\n\nNo commodity label in the ledger resembles it.")
+
+        ranked = "".join(
+            f"\n  {match.ticker:8} {match.score:.2f} {match.how:24} {match.label!r}"
+            for match in suggestions[:5]
+        )
+
+        return UnknownSecurityError(message + "\n\nClosest candidates in the ledger:" + ranked)
 
 
 @contextmanager
@@ -209,6 +401,10 @@ class StockAccountImporter(Importer):
     under `assets_root` map tickers to accounts. Income accounts are
     derived from asset accounts by replacing `assets_root` with
     `income_root`.
+
+    A label that no commodity declares exactly is not simply lost: see
+    SecurityResolver for the fallback matching, and the `fuzzy` flag for
+    how far the importer may go without asking.
     """
 
     FIELDS = [
@@ -227,13 +423,14 @@ class StockAccountImporter(Importer):
 
     FILENAME_RE = re.compile("HistoriqueOperationsBourse_.+")
 
-    def __init__(self, account_name: str, broker_fees_account: str, assets_root: str, income_root: str):
+    def __init__(self, account_name: str, broker_fees_account: str, assets_root: str, income_root: str, fuzzy: bool = False):
         csv.register_dialect("fortuneo", "excel", delimiter=";")
 
         self.account_name = account_name
         self.broker_fees_account = broker_fees_account
         self.assets_root = assets_root
         self.income_root = income_root
+        self.fuzzy = fuzzy
 
     def identify(self, filepath: str) -> bool:
         if not filepath.endswith((".zip", ".csv")):
@@ -265,6 +462,7 @@ class StockAccountImporter(Importer):
 
         label_to_ticker: dict[str, str] = {}
         ticker_to_account: dict[str, str] = {}
+        declared: dict[str, set] = {}
 
         for entry in existing_entries:
             if isinstance(entry, data.Commodity):
@@ -278,6 +476,11 @@ class StockAccountImporter(Importer):
 
                 label_to_ticker[label] = entry.currency
 
+                declared.setdefault(entry.currency, set()).update(
+                    value for value in (entry.meta.get("fortuneo-label"), entry.meta.get("name"))
+                    if isinstance(value, str) and value
+                )
+
             elif isinstance(entry, data.Open) and entry.currencies:
                 if not _is_under(entry.account, self.assets_root):
                     continue
@@ -290,21 +493,24 @@ class StockAccountImporter(Importer):
 
                     ticker_to_account[ticker] = entry.account
 
-        def resolve(label: str) -> Security:
-            ticker = label_to_ticker.get(label)
-            if ticker is None:
-                raise UnknownSecurityError(f"no commodity directive in the ledger declares the label {label!r} "
-                                           "(add one with a fortuneo-label metadata entry)")
+        # The leaf of the account name names the security too: the broker prints
+        # the trading mnemonic (EDF) where the metadata carries the company name
+        # (Electricité de France), and the other way round.
+        aliases = {
+            ticker: declared.get(ticker, set()) | {account.split(":")[-1]}
+            for ticker, account in ticker_to_account.items()
+        }
 
-            account = ticker_to_account.get(ticker)
-            if account is None:
-                raise UnknownSecurityError(f"commodity {ticker} (label {label!r}) has no open account under {self.assets_root}")
+        resolver = SecurityResolver(
+            aliases=aliases,
+            ticker_to_account=ticker_to_account,
+            assets_root=self.assets_root,
+            income_root=self.income_root,
+            exact=label_to_ticker,
+            fuzzy=self.fuzzy,
+        )
 
-            income_account = self.income_root + account[len(self.assets_root):]
-
-            return Security(ticker=ticker, account=account, income_account=income_account)
-
-        return resolve
+        return resolver.resolve
 
     def _classify(self, label: str, operation: str) -> OperationType:
         if operation == "Achat Comptant":
