@@ -2,8 +2,8 @@
 
 This directory contains a fully synthetic reproduction of a Fortuneo stock
 account (PEA) export — the `HistoriqueOperationsBourse_*.csv` / `.zip`
-files — for improving the `StockAccountImporter` of `beancount_fortuneo`
-(part of the `beancount-importers` package, a git fork).
+files — as a test fixture for the `StockAccountImporter` of
+`beancount_fortuneo`.
 
 No real data is included: companies, tickers, amounts, and dates are
 invented. The account names mirror the structure of the target beancount v3
@@ -16,7 +16,6 @@ ledger (French roots) so the expected output is directly representative.
 | `HistoriqueOperationsBourse_000000000000_du_01_07_2025_au_30_06_2026.csv` | The raw export, in the exact real format (see below). |
 | `HistoriqueOperationsBourse_000000000000_du_01_07_2025_au_30_06_2026.zip` | Same CSV wrapped in a zip, the form the bank sends and the importer's `identify()` accepts. |
 | `expected.beancount` | **Ground truth**: self-contained ledger that must pass `bean-check`. One section per data row, with the convention each row must follow. |
-| `current_output.beancount` | Output of the *current* importer on the zip, to document the gap. |
 | `generate_sample.py` | Regenerates the CSV/zip. Run with `uv run generate_sample.py`. |
 
 ## The raw file format
@@ -50,14 +49,14 @@ Ticker mapping (label → ticker → account):
 
 | Opération | Expected beancount entry |
 | --------- | ------------------------ |
-| `Achat Comptant` | Shares credited at unit price in the account above; `Dépenses:FraisBancaires:Courtage` + commission; `Actifs:Fortuneo:PEA:Cash` − net amount. Payee `"Fortuneo"`. |
-| `Vente comptant` | Shares **debited** at the sale price (no cost basis in the posting, e.g. `-50 ACME @ 14.00 EUR`); commission expensed; `Actifs:Fortuneo:PEA:Cash` + net amount. Payee `"Fortuneo"`. |
-| `Encaissement coupons intérêt/dividende` | `Revenu:UC:Actions:<TICKER>` + `Actifs:Fortuneo:PEA:Cash` + gross amount. **No share posting** — the quantity column is the number of shares that received the dividend, not shares acquired. Payee `"Fortuneo"`. |
-| `OST de création avec ou sans droits - Souscription avec droit` / `... - Attribution automatique` (all amounts `0.0`) | Bonus shares: single posting `<qty> <TICKER> {0 EUR, <date>}`, no other postings. No payee. |
+| `Achat Comptant` | Shares credited at unit price in the account above; `Dépenses:FraisBancaires:Courtage` + commission; `Actifs:Fortuneo:PEA:Cash` − net amount. |
+| `Vente comptant` | Shares **debited** at the sale price (no cost basis in the posting, e.g. `-50 ACME @ 14.00 EUR`); commission expensed; `Actifs:Fortuneo:PEA:Cash` + net amount. |
+| `Encaissement coupons intérêt/dividende` | `Revenu:UC:Actions:<TICKER>` + `Actifs:Fortuneo:PEA:Cash` + gross amount. **No share posting** — the quantity column is the number of shares that received the dividend, not shares acquired. |
+| `OST de création avec ou sans droits - Souscription avec droit` / `... - Attribution automatique` (all amounts `0.0`) | Bonus shares: single posting `<qty> <TICKER> {0 EUR, <date>}`, no other postings. |
 | `OST de création de coupons - Détachement coupon optionnel` and `ANNUL. OST de création de coupons ...` | **Ignored.** See "The noise cluster" below. |
 
 Narration convention: `<libellé> - <Opération>` (e.g.
-`"ACME CORP - Achat Comptant"`).
+`"ACME CORP - Achat Comptant"`). The importer sets no payee.
 
 ### The noise cluster (important)
 
@@ -68,15 +67,16 @@ and then an `ANNUL.` row cancelling the USD one — while the actual cash
 only ever arrives through the `Encaissement coupons intérêt/dividende` row
 (2026-04-28 here). Bookkeeping the OST rows (let alone the ANNUL row)
 double-counts or invents money. The net real effect of the whole cluster
-is the `Encaissement` row alone. An improved importer should skip the
-`OST de création de coupons` / `ANNUL. OST` rows (or, if it keeps them,
-ensure they net to zero and never touch `Actifs:Fortuneo:PEA:Cash`).
+is the `Encaissement` row alone, which is why the importer skips the
+`OST de création de coupons` / `ANNUL. OST` rows entirely.
 
 ## Ground truth
 
-`expected.beancount` contains the `open`/`option` scaffolding, one expected
-transaction per importable row (with a comment citing the source row),
-comments for the ignored rows, and final `balance` assertions:
+`expected.beancount` contains the `option` block, `commodity` directives
+(carrying the `fortuneo-label` metadata the importer resolves broker
+labels against), `open` lines, one expected transaction per importable
+row (with a comment citing the source row), comments for the ignored
+rows, and final `balance` assertions:
 
 ```
 2026-06-16 balance Actifs:Fortuneo:PEA:Cash                     2476.03 EUR
@@ -86,49 +86,29 @@ comments for the ignored rows, and final `balance` assertions:
 2026-06-16 balance Actifs:Fortuneo:PEA:UC:Trackers:GWETF          200 GWETF
 ```
 
-Validate with:
+## Checking
 
-```
-uv run bean-check expected.beancount   # (from the ledger project, or with a
-                                       #  local venv providing beancount >= 3)
-```
-
-A natural acceptance test for an improved importer: build a ledger from
-the scaffolding lines of `expected.beancount` (the `option` block, the
-`open` lines, the seed transaction, and the final `balance` lines) plus
-the importer's raw output for the zip, and require `bean-check` to pass.
-The balance assertions force correct share positions and cash flows, so
-every defect above (wrong direction, noise rows, dropped currency, …)
-makes the check fail.
-
-## What the current importer gets wrong
-
-See `current_output.beancount` (generated with the current
-`StockAccountImporter`). Concrete defects:
-
-1. Every row posts to the placeholder `Assets:Stock:STK` with the
-   placeholder commodity `STK` — no label→ticker/account mapping.
-2. `Vente comptant` **credits** shares (+50) instead of debiting them.
-3. Dividend and OST rows credit shares at zero cost — dividends must not
-   touch the share position at all.
-4. Zero-value OST rows produce a 3-posting transaction of all-zero amounts
-   instead of a single `<qty> <TICKER> {0 EUR}` posting.
-5. `ANNUL. OST` rows are imported as regular transactions instead of being
-   ignored/netted.
-6. Currency is dropped: the USD row's `28.4` is posted to the EUR cash
-   account as `28.4 EUR`.
-7. One-decimal amounts are emitted verbatim (`-890.5 EUR`); the target
-   ledger convention writes two decimals (`-890.50 EUR`).
-8. `identify()` accepts only `.zip` files, although the reader itself
-   (`archive_file`) also supports standalone `.csv`.
-9. No `payee` ("Fortuneo") on the importable rows.
+`uv run pytest` (at the repo root) covers the importer against this
+fixture: parsing tests per row type, plus the acceptance test
+(`test_extract_matches_ground_truth` in `tests/test_fortuneo_stock.py`)
+which builds a ledger from the scaffolding lines of `expected.beancount`
+(the `option` block, the `commodity` and `open` lines, the seed
+transaction, and the final `balance` lines) plus the importer's raw
+output for the zip, and requires `bean-check` to pass. The balance
+assertions force correct share positions and cash flows, so any wrong
+posting, dropped row or wrong direction makes the check fail.
 
 ## Wiring (context)
 
-- Importer: `beancount_fortuneo.StockAccountImporter(
-    "Actifs:Fortuneo:PEA:Cash", "Dépenses:FraisBancaires:Courtage")`.
-- Wired with Smart Importer hooks `PredictPayees()` and
-  `PredictPostings()` in the ledger's `extract.py`.
-- Extraction CLI: `just extract <input> <output>` (runs
-  `uv run ./extract.py extract -e data/ledger.beancount -o <output>
-  <input>`).
+- Importer:
+  `beancount_fortuneo.StockAccountImporter(
+      "Actifs:Fortuneo:PEA:Cash",
+      "Dépenses:FraisBancaires:Courtage",
+      "Actifs:Fortuneo:PEA",   # assets root to scan
+      "Revenu",                # income root
+  )`.
+- Securities are resolved from the ledger passed to `extract()` (the
+  `-e` ledger of the extraction CLI): `commodity` directives carry the
+  broker label in `fortuneo-label` metadata, `open` directives under
+  the assets root map tickers to accounts, and income accounts are the
+  asset accounts with the assets root replaced by the income root.
