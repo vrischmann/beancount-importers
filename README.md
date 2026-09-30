@@ -1,11 +1,91 @@
 # Beancount Importers
 
-This repository contains importers for [Beancount](https://github.com/beancount/beancount) which are capable of processing CSV exports from two french banks:
+Importers for [Beancount](https://github.com/beancount/beancount) v3 (via
+[beangulp](https://github.com/beancount/beangulp)) that process CSV exports
+from two French banks:
 
-* [Fortuneo](https://fortuneo.fr)
-* [Crédit Mutuel](https://creditmutuel.fr)
+* [Crédit Mutuel](https://creditmutuel.fr) — checking account statements
+* [Fortuneo](https://fortuneo.fr) — checking account and stock account (Bourse) statements
 
-This is _not_ a tool that automically fetches CSV exports from the bank: you need to download the CSV files yourself.
+This is _not_ a tool that automatically fetches CSV exports from the bank:
+you need to download the CSV files yourself.
+
+## Installation
+
+Requires Python 3.10+ and a [beancount](https://pypi.org/project/beancount/) v3 ledger.
+Install from GitHub into your ledger project:
+
+```sh
+uv add git+ssh://git@github.com/vrischmann/beancount-importers.git
+# or
+pip install git+https://github.com/vrischmann/beancount-importers.git
+```
+
+## Usage
+
+Configure the importers in your ledger's import script and let
+[beangulp](https://beancount.github.io/beangulp/) drive them:
+
+```python
+import beangulp
+
+from beancount_ccm import Importer as CcmImporter
+from beancount_fortuneo import CheckingAccountImporter, StockAccountImporter
+
+importers = [
+    CcmImporter("Actifs:CreditMutuel:Courant"),
+    CheckingAccountImporter("Actifs:Fortuneo:Courant"),
+    StockAccountImporter(
+        "Actifs:Fortuneo:PEA:Cash",              # cash account settled by trades
+        "Dépenses:FraisBancaires:Courtage",      # broker fees
+        assets_root="Actifs:Fortuneo:PEA:UC",    # open directives under this root map tickers to accounts
+        income_root="Revenu:UC",                 # income accounts are derived from asset accounts by swapping the roots
+    ),
+]
+
+ingest = beangulp.Ingest(importers)
+
+if __name__ == "__main__":
+    ingest()
+```
+
+Run it with beangulp's CLI:
+
+```sh
+# Check that a downloaded file is recognized, without importing it.
+uv run import.py identify ~/Downloads
+
+# Extract transactions into your ledger.
+uv run import.py extract -e ledger.beancount ~/Downloads
+```
+
+The `-e` ledger is mandatory for the Fortuneo stock importer: securities
+are resolved against the `commodity` and `open` directives of your ledger
+(see [below](#resolving-a-security-from-the-broker-label)).
+
+### What each importer produces
+
+**`beancount_ccm.Importer`** — Crédit Mutuel checking account
+(`<account number>.csv`, ISO-8859-15, semicolon-separated). One
+transaction per row, with the narration taken from the `Libellé` column,
+plus a balance assertion dated the day after the last row, checked
+against the final `Solde` of the statement.
+
+**`beancount_fortuneo.CheckingAccountImporter`** — Fortuneo checking
+account (the `HistoriqueOperations_*.zip` archive). One transaction per
+row, narration from the `libellé` column.
+
+**`beancount_fortuneo.StockAccountImporter`** — Fortuneo stock account
+(the `HistoriqueOperationsBourse_*.zip` archive, or the plain CSV). It
+understands these `Opération` types:
+
+| Opération                                  | Entry produced |
+| ------------------------------------------ | -------------- |
+| `Achat Comptant`                           | Shares credited at cost, broker fees expensed, cash account debited with the net amount |
+| `Vente comptant`                           | Shares debited at the sale price, broker fees expensed, cash account credited with the net amount |
+| `Encaissement coupons intérêt/dividende`   | Income account credited, cash account debited (no share posting) |
+| `OST de création avec ou sans droits ...`  | Bonus shares booked at a zero cost basis, single posting |
+| Anything else (e.g. `OST de création de coupons`, `ANNUL. OST`) | Skipped as bookkeeping noise |
 
 ## Resolving a security from the broker label
 
@@ -63,3 +143,19 @@ instead of a name — `HO` for Thales, `RNO` for Renault, `ALO` for Alstom.
 No matcher and no model closes that gap; `name:` holding the real company name
 does, and makes Fava nicer besides.
 
+## Development
+
+The project uses [uv](https://docs.astral.sh/uv/) and [just](https://github.com/casey/just):
+
+```sh
+just test          # run the test suite (uv run pytest)
+```
+
+The test fixtures are fully synthetic reproductions of the bank exports, in
+`synthetic/ccm-courant/` and `synthetic/fortuneo-bourse/`. Each directory has
+its own README describing the exact file format and the expected output; the
+fixtures are regenerated with `uv run generate_sample.py` from within them.
+
+## License
+
+[MIT](LICENSE)
